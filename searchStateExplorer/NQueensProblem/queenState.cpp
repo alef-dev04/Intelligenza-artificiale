@@ -20,13 +20,12 @@ double queenState::getHeuristic() const{
     for(int i = 0; i < queens_position.size(); i++) {
         for(int j = i + 1; j < queens_position.size(); j++) {
             
-            // 1. Controllo Orizzontale (Stessa riga)
-            // (Il tuo controllo, perfetto!)
+
             if(queens_position[i] == queens_position[j]) {
                 count++;
             } 
-            // 2. Controllo Diagonale
-            // Se la differenza tra le altezze (righe) è uguale alla differenza tra gli indici (colonne)
+            // controllo Diagonale
+            // ce la differenza tra le righe è uguale alla differenza tra le colonne
             else if(std::abs(queens_position[i] - queens_position[j]) == std::abs(i - j)) {
                 count++;
             }

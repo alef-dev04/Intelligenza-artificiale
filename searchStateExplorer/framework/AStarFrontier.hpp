@@ -7,16 +7,20 @@
 
 
 
-struct CompareEuristicPath {
+struct CompareAStar {
     bool operator()(const Node* a, const Node* b) const {
-        return a->state->getHeuristic() > b->state->getHeuristic();
+        double f_a = a->path_cost + a->state->getHeuristic();
+        double f_b = b->path_cost + b->state->getHeuristic();
+
+        
+        return f_a > f_b;
     }
 };
 
 
 class aStarFrontier: public Frontier{
 
-    std::priority_queue<Node*, std::vector<Node*>, CompareEuristicPath> nodes;
+    std::priority_queue<Node*, std::vector<Node*>, CompareAStar> nodes;
 
     public:
 
@@ -36,7 +40,7 @@ class aStarFrontier: public Frontier{
 
         std::vector<Node*> toString() const override{
             std::vector<Node*> result;
-            std::priority_queue<Node*, std::vector<Node*>, CompareEuristicPath> copy=nodes;
+            std::priority_queue<Node*, std::vector<Node*>, CompareAStar> copy=nodes;
             while(!copy.empty()){
                 result.push_back(copy.top());
                 copy.pop();

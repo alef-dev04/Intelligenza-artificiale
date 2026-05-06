@@ -63,7 +63,7 @@ class graphSearchSolver : public Solver{
                 
 
             }
-            
+            /*
             std::cout << "Nodo con stato :" << current_node->state->toString() << "\n\n";
             std::cout << "frontiera: " << "\n";
             std::vector<Node*> nodes_in_frontier = frontier->toString();
@@ -75,6 +75,7 @@ class graphSearchSolver : public Solver{
                 if(state != nullptr) std::cout << state->toString() << " , ";
             }
             std::cout << "\n\n";
+            */
             
         }
 
