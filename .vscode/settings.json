@@ -1,0 +1,7 @@
+{
+    "java.project.sourcePaths": [
+        "SATcodec_programs",
+        "SATcodec_programs\\NQueens_SAT"
+    ],
+    "java.project.referencedLibraries": []
+}
