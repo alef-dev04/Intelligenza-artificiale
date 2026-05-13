@@ -1,4 +1,4 @@
-package satToQueens;
+package NQueens_SAT.satToQueens;
 
 import it.uniroma1.di.tmancini.utils.*;
 import it.uniroma1.di.tmancini.teaching.ai.SATCodec.*;
@@ -11,15 +11,14 @@ public class satToQueens {
         SATModelDecoder decoder = new SATModelDecoder(args);
         decoder.run();
         int num_vars = decoder.getMaxVar();
-        
 
-        for(int i=0; i< num_vars; i++){
+        for (int i = 0; i < num_vars; i++) {
             Boolean val = decoder.getModelValue(i);
 
             SATModelDecoder.Var variable = decoder.decodeVariable(i);
             String family = variable.getFamily();
             List<Integer> indices = variable.getIndices();
-            
+
         }
     }
 }
