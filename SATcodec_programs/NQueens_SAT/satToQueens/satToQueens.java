@@ -1,4 +1,4 @@
-package NQueens_SAT.satToQueens;
+package satToQueens;
 
 import it.uniroma1.di.tmancini.utils.*;
 import it.uniroma1.di.tmancini.teaching.ai.SATCodec.*;
