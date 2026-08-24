@@ -1,0 +1,15 @@
+*.json
+*.parquet
+*.aux
+*.log
+*.toc
+*.out
+*.lof
+*.lot
+*.bcf
+*.xml
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.pdf
+*.pth

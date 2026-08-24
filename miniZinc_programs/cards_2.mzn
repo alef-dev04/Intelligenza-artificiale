@@ -1,17 +1,17 @@
 % Use this editor as a MiniZinc scratch book
 include "globals.mzn";
-int: N=7;
+int: N=10;
 %M è il massimo valore che le mie carte possono assumere
-int: M=4;
+int: M=6;
 %D è il parametro che ci dice la distanza tra i due massimi locali
-int: D=4;
+int: D=5;
 set of int: n=1..N;
 
 %array dove X[i] denota il valore della carta in posizione i
 %ad esempio X[3]=2 vuol dire che in posizione 3 troviamo la carta con valore 2
 array[n] of var int: X;
 
-array[n] of var 1..M: cards=[1,1,2,2,3,3,4];
+array[n] of var 1..M: cards=[1, 1, 2, 2, 3, 4, 4, 5, 6, 6];
 
 %p1 e p2 denotano le posizioni in cui si troveranno i due massimi locali
 var n: p1;

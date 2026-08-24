@@ -3,5 +3,7 @@
         "SATcodec_programs",
         "SATcodec_programs\\NQueens_SAT"
     ],
-    "java.project.referencedLibraries": []
+    "java.project.referencedLibraries": [],
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda"
 }
