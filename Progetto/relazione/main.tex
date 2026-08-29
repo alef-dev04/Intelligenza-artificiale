@@ -9,6 +9,7 @@
 \usepackage{booktabs}
 \usepackage{xcolor}
 \usepackage{colortbl}
+\usepackage{subcaption}
 
 \title{Transformers}
 \author{Alessandro Ferri}
@@ -24,20 +25,134 @@
 \newpage
 
 \section{Perché sono nati i Transformers? I limiti delle architetture precedenti}
-\subsection{Reti Ricorrenti}
-Le \textbf{RNN(Recurrent Neural Networks)} e le \textbf{LSTM(Long Short-Term Memory)} sono due tipi di reti neurali che pongono una "base storica" per la nascita dei \textbf{Transformers}.
-Sebbene però queste due architetture abbiano introdotto il concetto di \texttt{memoria}, presentano dei limiti nella scalabilità e nelle dipendenze a lungo raggio.
+\subsection{Reti Ricorrenti e LSTM}
+Una \textbf{RNN(Recurrent Neural Network)} è una rete neurale progettata per elaborare dati sequenziali o temporali.
+Questo tipo di rete si distingue dalle classiche Feed-Forward per la loro "memoria", in quanto prendono informazioni da input precedenti per influenzare l'input e l'output correnti,
+viene quindi eliminato il presupposto di indipendenza tra input e output.
+Per fare ciò la rete tiene traccia del contesto mantenendo uno \textbf{stato nascosto} tra un passo e il successivo.
+Ad ogni passo la RNN elabora l'input corrente insieme allo stato nascosto del passo precedente, in modo da utilizzare informazioni precedenti per influenzare l'output attuale.
+\begin{figure}[htbp]
+    \centering
+    
+    % --- PRIMA IMMAGINE ---
+    % Il parametro 0.45\textwidth indica che l'immagine occuperà il 45% della larghezza della pagina
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/ffn.png}
+        \caption{Rete \textsl{Feed-Forward}}
+        \label{fig:img1}
+    \end{subfigure}
+    \hfill % \hfill inserisce uno spazio vuoto automatico per distanziare le due immagini
+    % --- SECONDA IMMAGINE ---
+    \begin{subfigure}[b]{0.45\textwidth} 
+        \centering
+        \includegraphics[width=\textwidth]{img/rnn.png}
+        \caption{Rete \textsl{ricorrente}}
+        \label{fig:img2}
+    \end{subfigure}
+    
+    \caption{Differenza tra le strutture di una rete \textsl{Feed-Forward} ed una rete \textsl{ricorrente}}
+    \label{fig:entrambe_le_figure}
+\end{figure}
+\newline
+Le \textbf{LSTM(Long Short-Term Memory)} sono un tipo di RNN create appositamente per eliminare il problema delle dipendenze a lungo raggio.
+La struttura della LSTM si caratterizza per l'introduzione di una \textbf{memory cell}, un \textbf{hidden state} e tre \textbf{gate}, chiamati \textbf{forget gate}, \textbf{input gate}, \textbf{output gate}; queste componenti regolano il passaggio di informazione attraverso la rete.
+\newpage
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{img/lstm_architecture.png}
+    \caption{Struttura \textsl{LSTM}}
+    \label{fig:lstm_architecture}
+\end{figure}
+La \texttt{memory cell} permette all'informazione contenente il contesto di tutte le elaborazioni precedenti di fluire da un livello all'altro, infatti la sua evoluzione dipende dall'interazione dei vari gate.
+L'\texttt{hidden state} funge invece da "memoria a breve termine", decidendo quanta dell'informazione calcolata al passo precedente, mostrare al passo successivo; agendo come un "filtro" dell'\textsl{output gate}.
+L'elaborazione principale avviene attraverso i 3 gate:
+\begin{itemize}
+    \item Il \textsl{Forget Gate} decide quanta informazione proveniente dal passo temporale precedente tenere o scartare:
+    $$f_t = \sigma(W_f[h_{t-1}, X_t] + b_f)$$
+    \item L'\textsl{Input Gate} determina quanta della nuova informazione proveniente dall'input aggiungere alla memoria:
+    $$i_t = \sigma(W_i[h_{t-1}, X_t] + b_i)$$
+    \item L'\textsl{Output Gate} determina quanta informazione dello stato interno rendere visibile come output:
+    $$o_t = \sigma(W_o[h_{t-1}, X_t] + b_o)$$
+    
+\end{itemize}
 
-A differenza delle reti Feed-Forward, una RNN elabora una sequenza in input mantenendo uno stato nascosto $h_t$ il quale funge da memoria del contesto.
-Il limite di questa architettura però riguarda la sua elaborazione sequenziale, cioè per calcolare lo stato $h_t$ è necessario aver completato il calcolo di $h_{t-1}$, di conseguenza questo approccio non è parallelizzabile, rendendolo così inefficiente.
+dove:
+\begin{itemize}
+    \item $\sigma$ è la funzione di attivazione Sigmoide.
+    \item $X_t$ è il vettore in input.
+    \item $h_{t-1}$ è l'hidden state del livello precedente.
+    \item $W_f, W_i, W_o$ sono le matrici dei pesi dei rispettivi gate, ricavate durante l'addestramento.
+    \item $b_f, b_i, b_o$ sono i vettori di bias dei rispettivi gate, anch'essi appresi tramite addestramento.
+\end{itemize}
+
+Prendendo ad esempio il \textsl{forget gate} (il comportamento degli altri gate è analogo):
+\begin{enumerate}
+    \item $[h_{t-1}, X_t]$ è concatenazione tra il vettore dell'hidden state del passo precedente ($h_{t-1}$) e il vettore in input attuale ($X_t$).
+    \item $W_f[h_{t-1}, X_t] + b_f$ il vettore concatenato viene moltiplicato per la rispettiva matrice di pesi del gate in modo da combinare le informazioni dell'input corrente con quelle del passo precedente, successivamente viene sommato il rispettivo bias per permettere una regolazione della soglia di attivazione.
+    \item $\sigma(W_f[h_{t-1}, X_t] + b_f)$ infine l'applicazione della funzione sigmoide ($\sigma$) permette di comprimere il risultato tra $0$ e $1$.
+\end{enumerate}
+
+Dopodiché avviene il calcolo di una memory cell candidata:
+$$L_t = \tanh(W_c[h_{t-1}, X_t] + b_c)$$
+Il suo scopo è creare un vettore di possibili nuove informazioni da aggiungere alla memoria.
+Il funzionamento è analogo ai gate, tranne per la funzione di attivazione, in questo caso si utilizza la $\tanh$
+poiché scalando i valori nell'intervallo $[-1,1]$ permette di indicare sia un incremento che un decremento delle informazioni memorizzate.
+
+Dopo ciò può essere calcolato l'effettivo aggiornamento della memory cell, andando a combinare le informazioni passate con quelle presenti:
+$$C_t = f_t \times C_{t-1} + i_t \times L_t$$
+dove:
+\begin{enumerate}
+    \item $f_t \times C_{t-1}$ indica quanta dell'informazione passata mantenere.
+    \item $i_t \times L_t$ indica quanta dell'informazione all'interno della memoria candidata sia rilevante.
+    \item somma i due contributi per avere un nuovo valore della memory cell $C_t$
+\end{enumerate}
+
+Come ultimo passo viene calcolato il nuovo hidden state:
+$$h_t = O_t \times \tanh(C_t)$$
+in cui:
+\begin{enumerate}
+    \item $\tanh(C_t)$ schiaccia e normalizza i valori della memory cell nell'intervallo $[-1,1]$ per evitare una loro eventuale esplosione.
+    \item $O_t$ agisce da filtro decidendo quali tra questi valori siano rilevanti per questo step temporale.
+
+\end{enumerate}
+
+
+Il risultato finale fungerà da filtro dell'informazione, un valore vicino allo $0$ indica che l'informazione verrà cancellata (poiché corrisponde all'informazione già in nostro possesso); un valore vicino ad $1$ invece permette all'informazione di passare verso il passo successivo.
+
+Il limite di questa architettura però riguarda la sua elaborazione sequenziale, come abbiamo visto calcolare lo stato $h_t$ è necessario aver completato il calcolo di $h_{t-1}$, di conseguenza questo approccio non è parallelizzabile, rendendolo così inefficiente.
 \subsection{Il Vanishing Gradient}
 L'elaborazione in sequenza porta inoltre al problema del \textbf{Vanishing Gradient}, responsabile della perdita di contesto a lungo raggio.
+Questa problematica è presente principalmente nelle RNN tradizionali, le LSTM sono state create appositamente per mitigarla, ma anche quest'ultime non ne sono completamente esenti nelle sequenze molto lunghe.
 
 Il Vanishing Gradient avviene quando la correzione degli errori diventa così piccola durante l'addestramento da impedire ai primissimi livelli di imparare.
-Questo avviene poiché la rete per capire quanto ogni singolo pezzo della rete ha contribuito all'errore utilizza la \textbf{Backpropagation}, il cui risultato è dato dalla moltiplicazione di molti piccoli numeri (le derivare dei diversi passaggi).
+Questo avviene poiché la rete per capire quanto ogni singolo pezzo della rete ha contribuito all'errore utilizza la \textbf{Backpropagation}, 
+governata dall'equazione:
+$$\frac{\partial \mathcal{L}}{\partial h_1} = \frac{\partial \mathcal{L}}{\partial h_T} \cdot \frac{\partial h_T}{\partial h_{T-1}} \cdot \frac{\partial h_{T-1}}{\partial h_{T-2}} \cdots \frac{\partial h_2}{\partial h_1} = \frac{\partial \mathcal{L}}{\partial h_T} \prod_{k=2}^{T} \frac{\partial h_k}{\partial h_{k-1}}$$
+La derivata parziale tra due istanti di tempo consecutivi ($\frac{\partial h_t}{\partial h_{t-1}}$) impone la moltiplicazione per la derivata prima della funzione di attivazione (in questo caso la sigmoide).
+Questo perché se andiamo a "scompattare" otteniamo:
+$$\frac{\partial h_k}{\partial h_{k-1}} = \frac{\partial h_k}{\partial z_k} \cdot \frac{\partial z_k}{\partial h_{k-1}}$$
+dove $z_k$ è la funzione che combina lo stato precedente al nuovo input. \newline
+Ciò che a noi interessa è:
+$$\frac{\partial \sigma(z_k)}{\partial z_k}=\sigma'(z_k)$$
+Ed è così che otteniamo, per ogni livello, il fattore moltiplicativo dato dalla funzione di attivazione.
 Nelle RNN inizialmente come funzione di attivazione veniva utilizzata la Sigmoide (la cui derivata vale al massimo $0.25$), poiché la moltiplicazione continua di numeri $<1$ tende a $0$, i primi livelli della rete avevano un "assegnazione di colpa" quasi pari a $0$
 facendo credere (erroneamente) alla rete che quei livelli funzionano correttamente.
-Esiste anche il problema inverso, cioè l'\textbf{Exploding Gradient}, il gradiente che tende ad $+\infty$.
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.7\textwidth]{img/sigmoid_graph.png}
+    \caption{Grafico della funzione sigmoide e della sua derivata}
+    \label{fig:sigmoide}
+\end{figure}
+\newpage
+Esiste anche il problema inverso, cioè l'\textbf{Exploding Gradient}, il gradiente che tende ad $+\infty$, a causa ad esempio di funzioni di attivazione come la \texttt{ReLU} (dove $ReLU(x)=max(0,x)$),
+la cui derivata è pari a $1$ per $x>0$, non essendo quindi limitata superiormente permette una crescita libera del gradiente.
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/relu_graph.png}
+    \caption{Grafico della funzione ReLU}
+    \label{fig:relu}
+\end{figure}
 
 \subsection{Dalle LSTM ai Transformers}
 Le architetture \textbf{LSTM} hanno attenuato il problema del vanishing gradient tramite l'introduzione dei gate (gate di input, forget ed output).
