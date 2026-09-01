@@ -13,3 +13,6 @@
 *.synctex.gz
 *.pdf
 *.pth
+analisi.py
+plot_errors.py
+plot_predictions.py

@@ -92,8 +92,28 @@ Prendendo ad esempio il \textsl{forget gate} (il comportamento degli altri gate 
     \item $W_f[h_{t-1}, X_t] + b_f$ il vettore concatenato viene moltiplicato per la rispettiva matrice di pesi del gate in modo da combinare le informazioni dell'input corrente con quelle del passo precedente, successivamente viene sommato il rispettivo bias per permettere una regolazione della soglia di attivazione.
     \item $\sigma(W_f[h_{t-1}, X_t] + b_f)$ infine l'applicazione della funzione sigmoide ($\sigma$) permette di comprimere il risultato tra $0$ e $1$.
 \end{enumerate}
+Di seguito un esempio numerico per capire il funzionamento dei gate, per brevità verranno utilizzati vettori ad una dimensione: \newline
+consideriamo lo stato nascosto precedente $h_{t-1} = 1.0$, l'input $X_t = -3.0$ e i parametri del gate $W_f = [1.0, \; 2.0]$ e $b_f = 0$:
+\begin{enumerate}
+    \item 
+    \begin{equation*}
+        W_f [h_{t-1}, X_t] + b_f = \begin{bmatrix} 1.0 & 2.0 \end{bmatrix} \begin{bmatrix} 1.0 \\ -3.0 \end{bmatrix} + 0 = (1.0 \cdot 1.0) + (2.0 \cdot (-3.0)) = -5.0
+    \end{equation*}
+    
+    \item 
+    \begin{equation*}
+        f_t = \sigma(-5.0) = \frac{1}{1 + e^{5.0}} \approx 0.0067
+    \end{equation*}
+    
+    \item 
+    \begin{equation*}
+        f_t \cdot C_{t-1} = 0.0067 \cdot 10.0 = 0.067
+    \end{equation*}
+\end{enumerate}
+Poiché $f_t \approx 0$, il gate elimina quasi tutta la memoria accumulata in $C_{t-1}$.
 
-Dopodiché avviene il calcolo di una memory cell candidata:
+
+Dopodiché avviene il calcolo di una \textbf{memory cell candidata}:
 $$L_t = \tanh(W_c[h_{t-1}, X_t] + b_c)$$
 Il suo scopo è creare un vettore di possibili nuove informazioni da aggiungere alla memoria.
 Il funzionamento è analogo ai gate, tranne per la funzione di attivazione, in questo caso si utilizza la $\tanh$
@@ -267,21 +287,30 @@ Prima di poter fare qualsiasi calcolo il modello deve trasformare il testo "grez
 A questo punto sorge il problema, dato che i Transformers leggono tutti i vettori \textbf{contemporaneamente} perdono completamente il concetto di sequenza e ordine delle parole, il \textbf{positional encoding} è nato proprio per risolvere questo.
 
 \subsubsection{La soluzione}
-Il \textbf{Positional Encoding} è una tecnica che permette di aggiungere informazione riguardo la posizione di ogni token nella sequenza, la più famosa prende il nome di \textbf{Sinusoidal Positional Encoding} derivato dal suo uso delle funzioni seno e coseno.
+Il \textbf{Positional Encoding} è una tecnica che permette di aggiungere informazione riguardo la posizione di ogni token nella sequenza, la più famosa prende il nome di \textbf{Sinusoidal Positional Encoding} derivato dall'uso delle funzioni seno e coseno.
 Per ogni posizione $pos \in \{0,\dots,L-1\}$ viene generato un vettore $PE_{pos}$ avente la stessa dimensione dell'embedding del token, in modo da poter essere sommato a quest'ultimo:
 $$PE_{(pos, \, 2i)} = \sin\left(\frac{pos}{10000^{2i / d_{model}}}\right)$$
 $$PE_{(pos, \, 2i+1)} = \cos\left(\frac{pos}{10000^{2i / d_{model}}}\right)$$
 dove $pos$ è la posizione del token nella sequenza e $i$ è l'indice del vettore.
-La proprietà di questa formula è che le prime dimensioni del vettore $PE$ cambiano ad altissima frequenza al variare della posizione, invece le ultime dimensioni variano su "scale lunghe" (ad esempio cambio di paragrafi),
-questa metodologia permette al modello di stare al passo anche con contesti lontani tra loro all'interno di un testo.
-
+Il denominatore invece denota la frequenza dell'onda, per $i=0$ (le prime dimensioni del vettore) la frequenza sarà molto alta, ciò vuol dire che posizioni vicine avranno valori completamente diversi; in questo modo può apprendere relazione a breve distanza (ad esempio tra una parola e la successiva). \newline
+Nelle ultime dimensioni ($i = \frac{d_{\text{model}}}{2}-1$) la frequenza sarà bassa, in modo che la variazione dei valori delle posizioni vicine sarà quasi nulla, ma ci sarà invece un cambiamento dei valori delle posizioni lontane; così da mantenere anche un contesto a lungo raggio. \newline
+La scelta del valore $10000$ permette di avere un periodo di $\approx 60000$ token per le ultime posizioni del vettore, questo permette di non avere sovrapposizioni di valori.
+Prendiamo ad esempio un modello di dimensione 4 ($d_{model}=4$) e calcoliamo il vettore di posizione per il primo token di una sequenza: \newpage
+$$\text{PE}(1) = \left[ \sin\left(\frac{1}{10000^{2\times 0/4}}\right), \, \cos\left(\frac{1}{10000^{2\times 0/4}}\right), \, \sin\left(\frac{1}{10000^{2\times 1/4}}\right), \, \cos\left(\frac{1}{10000^{2\times 1/4}}\right) \right]$$
+eseguendo i calcoli:
+$$\text{PE}(1) = \left[ \sin\left(\frac{1}{1}\right), \, \cos\left(\frac{1}{1}\right), \, \sin\left(\frac{1}{100}\right), \, \cos\left(\frac{1}{100}\right) \right]$$
+applicando le funzioni il vettore finale risulta:
+$$\text{PE}(1) = \big[ 0.8415, \, 0.5403, \, 0.0100, \, 0.9999 \big]$$
+Eseguendo lo stesso calcolo per il token successivo otteniamo:
+$$\text{PE}(2) = \big[ 0.9092, \, -0.4161, \, 0.0199, \, 0.9998 \big]$$
+Confrontando i due risultati possiamo notare che avviene una variazione di valori come descritto in precedenza.
 
 \subsection{Encoder}
-L'encoder è un componente della rete il cui compito è quello di ricevere in input le rappresentazioni numeriche delle parole (gli embeddings) e trasformarli in embedding contestualizzati, applicando il meccanismo di self-attention e una parte di feed forward.
+L'encoder è un componente della rete il cui compito è quello di ricevere in input le rappresentazioni numeriche delle parole (gli embeddings) e trasformarli in \textbf{embedding contestualizzati}, applicando il meccanismo di self-attention e una parte di feed forward.
 Il blocco dell'encoder è formato da 6 livelli identici, composti da una parte di self-attention ed una piccola rete neurale feed-forward.
 \begin{figure}[h!]
     \centering
-    \includegraphics[width=1\textwidth]{img/encoder.png}
+    \includegraphics[width=\textwidth]{img/encoder.png}
     \caption{Struttura di un livello dell'Encoder}
     \label{fig:placeholder}
 \end{figure}
@@ -294,7 +323,6 @@ Dopodiché troviamo il blocco \texttt{Add \& Normalize} il quale ha due compiti:
     \item \textbf{La parte "Add"}: somma il vecchio vettore $x$ con il risultato del calcolo dell'attenzione, quindi $x+Attention(x)$; questo fa in modo che il modello non elimini l'informazione iniziale del vettore, e in questo modo se uno strato non ha nulla di utile da aggiungere può far passare il vettore $x$ inalterato.
     \item \textbf{La parte "Normalize"}: poiché dopo aver sommato i vettori i numeri potrebbero diventare difficili da gestire (alcuni troppo grandi e altri troppo piccoli), questo strato li riscala in modo che abbiamo media 0 e deviazione standard 1, permettendo alla rete di eseguire l'addestramento in modo omogeneo.
 \end{enumerate}
-Il blocco \texttt{Add \& Normalize} serve per far sì che il modello non "dimentichi" l'identità base delle parole, semplicemente somma il vettore originale con quello risultante dalla self-attention, applicando infine una normalizzazione.
 
 \subsubsection{Feed-Forward Network}
 \label{sec:ffn}
@@ -311,7 +339,7 @@ dove:
 \subsection{Decoder}
 
 L'ultimo pezzo è il \textbf{decoder}, il quale prenderà tutta la conoscenza generata dall'\textbf{encoder} per generare un risposta (ad esempio una traduzione).
-A differenza dell'encoder il quale legge tutto il testo in un colpo solo, il decoder genera una parola alla volta (\textbf{autoregressione}). Anche per il decoder abbiamo una struttra a livelli, ma questa volta dentro ogni livello è presente un meccanismo aggiuntivo, avendone in tutto 3.
+A differenza dell'encoder il quale legge tutto il testo in un colpo solo, il decoder genera una parola alla volta (\textbf{autoregressione}). Anche per il decoder abbiamo una struttura a livelli, ma questa volta dentro ogni livello è presente un meccanismo aggiuntivo, avendone in tutto 3.
 
 \subsubsection{Masked Self-Attention}
 \label{masked}
@@ -346,7 +374,7 @@ Dopodiché inizia la fase in cui il vettore $h_{\text{out}} \in \mathbb{R}^{d_{m
 \begin{enumerate}
     \item Il vettore viene proiettato nello spazio del vocabolario, un vocabolario interno del modello composto da tutte le parole di sua conoscenza.
     $$\text{logits} = h_{\text{out}} W_{\text{vocab}} + b_{\text{vocab}}$$
-    dove $W_{\text{vocab}} \in \mathbb{R}^{d_{model} \times \vert{}V\vert{}}$ e $\vert{}V\vert{}$ è la dimensione del vocabolario. Con questo passaggio otteniamo un vettore di punteggi grezzi.
+    dove $W_{\text{vocab}} \in \mathbb{R}^{d_{model} \times \vert{}V\vert{}}$ e $\vert{}V\vert{}$ è la dimensione del vocabolario. Con questo passaggio otteniamo un vettore di punteggi grezzi indicante l'affinità tra il token che stiamo considerando ed ognuna delle parole presenti nel vocabolario.
     \item Infine tramite la funzione Softmax trasformiamo i punteggi grezzi in distribuzioni di probabilità, selezionando (o con una Greedy Search o con altri algoritmi) il token da generare come parola successiva.
 \end{enumerate}
 
@@ -367,4 +395,134 @@ A differenza degli Encoder-Only, questi non possono vedere l'intera sequenza per
 \subsection{Encoder-Decoder}
 Gli \textbf{Encoder-Decoder} invece sono il modello originale, costituiti da entrambi i meccanismi appena visti.
 Vengono utilizzati ad esempio per \textbf{traduzioni e riassunti}
+
+\section{Risultati sperimentali}
+In questa sezione verranno confrontati i risultati ottenuti con l'attività del progetto di Intelligenza Artificiale e con l'attività di tirocinio.
+Entrambe le attività hanno lo stesso obiettivo, usando però architetture diverse, nel progetto è stato utilizzato il Transformer, nel tirocinio invece una LSTM.
+\subsection{Obiettivo}
+L'obiettivo è quello di prendere due rapporti dei prezzi \texttt{Open} e \texttt{Close} del mercato finanziario e prevedere il rendimento della giornata attuale. \newline
+Formalmente, indicando con $O_t$ (prezzo di apertura al tempo $t$) e $C_t$ (prezzo di chiusura al tempo $t$):
+
+\begin{itemize}
+    \item $\frac{O_t}{C_{t-1}}$ (\textsl{Rapporto Overnight}): indica la variazione di prezzo avvenuta a mercati chiusi, dovuta spesso da notizie od eventi fuori orario.
+    \item $\frac{C_{t-1}}{O_{t-1}}$ (\textsl{Rapporto Intraday del giorno precedente}): esprime la variazione di prezzo tra l'apertura e la chiusura del giorno precedente.
+    \item $\frac{C_{t}}{O_{t}}$ (\textsl{Rapporto Intraday target}): stima del rendimento della giornata attuale, utilizzato come obiettivo della predizione.
+\end{itemize}
+
+\subsection{Risultati}
+Di seguito verrano mostrati a confronto i grafici rappresentanti le previsioni effettuate da entrambe le architetture sul ticker \texttt{AAPL}.
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w10_AAPL.png}
+        \caption{Transformer con finestra $W=10$}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w_10_lstm_AAPL.png}
+        \caption{LSTM con finestra $W=10$}
+    \end{subfigure}
+    \caption{Confronto tra i due modelli con finestra $W=10$}
+    \label{fig:confronto_w10}
+\end{figure}
+%--------------------------------
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w20_AAPL.png}
+        \caption{Transformer con finestra $W=20$}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w_20_lstm_AAPL.png}
+        \caption{LSTM con finestra $W=20$}
+    \end{subfigure}
+    \caption{Confronto tra i due modelli con finestra $W=20$}
+    \label{fig:confronto_w20}
+\end{figure}
+%---------------------------------
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w30_AAPL.png}
+        \caption{Transformer con finestra $W=30$}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w_30_lstm_AAPL.png}
+        \caption{LSTM con finestra $W30$}
+    \end{subfigure}
+    \caption{Confronto tra i due modelli con finestra $W=30$}
+    \label{fig:confronto_w30}
+\end{figure}
+%------------------------------------
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w50_AAPL.png}
+        \caption{Transformer con finestra $W=50$}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w_50_lstm_AAPL.png}
+        \caption{LSTM con finestra $W=50$}
+    \end{subfigure}
+    \caption{Confronto tra i due modelli con finestra $W=50$}
+    \label{fig:confronto_w50}
+\end{figure}
+%---------------------------------
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w100_AAPL.png}
+        \caption{Transformer con finestra $W=100$}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_prev_w_100_lstm_AAPL.png}
+        \caption{LSTM con finestra $W=100$}
+    \end{subfigure}
+    \caption{Confronto tra i due modelli con finestra $W=100$}
+    \label{fig:confronto_w100}
+\end{figure}
+\newpage
+Infine mostriamo i grafici che rappresentano l'andamento delle metriche di errore calcolate 
+(\texttt{MSE\footnote{Il \textit{Mean Squared Error (Errore Quadratico Medio)} indica la discrepanza quadratica media fra i valori dei dati osservati ed i valori dei dati stimati, calcolato come: $\frac{1}{N} \sum_{t=1}^{N} \left( y_t - \hat{y}_t \right)^2$}, 
+MAE\footnote{Il \textit{Mean Absolute Error (Errore Assoluto Medio)} misura la grandezza dell'errore senza considerare la direzione, calcolato come: $\frac{1}{N} \sum_{t=1}^{N} \left| y_t - \hat{y}_t \right|$}, 
+MAPE\footnote{Il \textit{Mean Absolute Percentage Error (Errore Assoluto Medio Percentuale)} misura l'accuratezza di una previsione come percentuale, calcoalto come: $\frac{100}{N} \sum_{t=1}^{N} \left| \frac{y_t - \hat{y}_t}{y_t} \right|$}}) al variare della dimensione della finestra.
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.88\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_errori_globali_transformer.png}
+        \caption{Grafico errori Transformer}
+        \label{fig:errori_transformer}
+    \end{subfigure}
+    
+    \vspace{0.4cm} % Spazio verticale tra le due immagini
+    
+    \begin{subfigure}[b]{0.88\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/plots/grafico_errori_globali_lstm.png}
+        \caption{Grafico errori LSTM}
+        \label{fig:errori_lstm}
+    \end{subfigure}
+    
+    \caption{Confronto degli errori delle previsioni dei modelli al variare della dimensione della finestra}
+    \label{fig:confronto_verticale}
+\end{figure}
+
+Dai grafici delle prestazioni possiamo notare un comportamento classico quando si lavora con le serie storiche finanziarie, ovvero il \textbf{collasso sulla media}.
+Poiché i mercati finanziari sono dominati da un basso rapporto segnale-rumore\footnote{Il \textit{rapporto segnale-rumore} (Signal-to-Noise Ratio, SNR) misura la proporzione tra l'informazione utile e prevedibile (segnale) e le fluttuazioni casuali non informative (rumore). Un basso rapporto segnale-rumore indica che il segnale è oscurato dal rumore, rendendo difficile il suo recupero.} risultano difficilmente prevedibili.
+Durante l'addestramento però il modello converge verso la soluzione che minimizza l'errore, ovvero prevedere valori vicini alla media (che in questo caso è $\approx 1$); come notiamo dai grafici la varianza della linea blu che rappresenta le previsioni rimane costante intorno al valore $1$.
 \end{document}

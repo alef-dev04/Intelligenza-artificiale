@@ -1,4 +1,3 @@
-
 import argparse
 import io
 import os
@@ -11,7 +10,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from transformers import PatchTSTConfig, PatchTSTModel
 
-
+#inizializzazione del modello nello stesso modo in cui viene inizializzato in network_training.py
 class transformer(nn.Module):
     def __init__(self, patch_size=None, patch_stride=None, d_model=32, num_feature=2, history_window=90):
         super().__init__()
@@ -52,17 +51,14 @@ class transformer(nn.Module):
         prediction = self.ff_head(embedding)
         return prediction
 
-
-def prepare_data_test(file_path, window_size):
-    print(f"Caricamento dati da {file_path}...")
-    df = pl.read_parquet(file_path)
+#divido i dati nello stesso modo in cui vengono divisi in network_training.py
+def prepare_data_test(parquet_path, window_size, sample_pct=100.0):
+    print("carico dataset")
+    df = pd.read_parquet(parquet_path)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df_test = df[df['timestamp'].dt.year <= 2000].copy()
+    df_test.sort_values(by=['ticker', 'timestamp'], inplace=True)
     
-    # Cast timestamp
-    if df["timestamp"].dtype != pl.Datetime:
-        df = df.with_columns(pl.col("timestamp").str.to_datetime())
-
-    df_test = df.filter(pl.col("timestamp").dt.year() > 2000).sort(["ticker", "timestamp"]).to_pandas()
-    print(f"Righe dopo il filtro > 2000: {len(df_test)}")
 
     feature_cols = [
         "ratio_O_t_div_C_t_prev", 
@@ -75,7 +71,7 @@ def prepare_data_test(file_path, window_size):
     tickers_list = []
     timestamps_list = []
 
-    print("Costruzione sliding window...")
+    print("costruisco sliding window")
     for ticker, group in df_test.groupby("ticker"):
         data_matrix = group[feature_cols].values
         target_array = group[target_col].values
@@ -91,11 +87,27 @@ def prepare_data_test(file_path, window_size):
             tickers_list.append(ticker)
             timestamps_list.append(timestamp_array[i])
 
-    return np.array(sequences, dtype=np.float32), np.array(targets, dtype=np.float32), tickers_list, timestamps_list
+    sequences = np.array(sequences, dtype=np.float32)
+    targets = np.array(targets, dtype=np.float32)
+    tickers_list = np.array(tickers_list)
+    timestamps_list = np.array(timestamps_list)
+
+    if sample_pct < 100.0:
+        frac = sample_pct / 100.0
+        n_seq = len(sequences)
+        n_sample = int(n_seq * frac)
+        idx = np.random.choice(n_seq, size=n_sample, replace=True)
+        
+        sequences = sequences[idx]
+        targets = targets[idx]
+        tickers_list = tickers_list[idx]
+        timestamps_list = timestamps_list[idx]
+        
+    print("fine preparazione dati")
+    return sequences, targets, tickers_list.tolist(), timestamps_list.tolist()
 
 
-class FastTensorDataset(Dataset):
-    """Dataset leggero: carica solo le sequenze su CPU/RAM senza overhead di stringhe."""
+class FinancialDataset(Dataset):
     def __init__(self, sequences):
         self.sequences = torch.from_numpy(sequences)
 
@@ -106,93 +118,100 @@ class FastTensorDataset(Dataset):
         return self.sequences[idx]
 
 
-def save_to_postgres_fast_copy(df_results, db_params):
-    """Salvataggio ultraveloce tramite PostgreSQL COPY nativo via StringIO."""
-    print("Connessione al database PostgreSQL via ngrok...")
-    conn = psycopg2.connect(**db_params)
-    cursor = conn.cursor()
-
-    print(f"Preparazione stream in-memory per {len(df_results)} record...")
-    buffer = io.StringIO()
-    # Scrittura diretta in CSV in memoria senza header
-    df_results.to_csv(buffer, index=False, header=False, sep='\t')
-    buffer.seek(0)
-
-    print("Esecuzione COPY expert in streaming...")
-    copy_sql = """
-        COPY ml_experiments_transformer (ticker, timestamp, window_size, target, prev)
-        FROM STDIN WITH (FORMAT CSV, DELIMITER E'\t', NULL '')
-    """
-    cursor.copy_expert(sql=copy_sql, file=buffer)
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-    print("Inserimento COPY completato con successo.")
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--w', type=int, required=True, help='Dimensione sliding window')
-    #parser.add_argument('--dataset', type=str, default="", help='Path parquet')
+    parser.add_argument('--w', type=int, nargs='+', required=True, help='dimensione/i sliding window (es. --w 10 20 30)')
+    parser.add_argument('--p', type=float, default=100.0, help='percentuale di dati da usare in test')
+    parser.add_argument('--out', type=str, default="predictions_all_windows.parquet", help='nome file parquet di output')
     args = parser.parse_args()
 
-    history_window = args.w
-    dataset_path = "/kaggle/input/datasets/aleferri5642/market-data-ratios/market_data_ratios.parquet"
-
-    db_params = {
-        "dbname": "postgres",
-        "user": "postgres",
-        "password": "admin",
-        "host": "5.tcp.eu.ngrok.io",
-        "port": "14206"
-    }
-
+    dataset_path = "hf://datasets/ale5642/financial_data_ratios/market_data_ratios.parquet"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"In esecuzione su: {device}")
-
-    # 1. Modello
-    model = transformer(history_window=history_window).to(device)
-    weights_path = f"/kaggle/input/datasets/aleferri5642/weights/transformer_weights_w{history_window}.pth"
-    if not os.path.exists(weights_path):
-        raise FileNotFoundError(f"Pesi {weights_path} non trovati.")
-    model.load_state_dict(torch.load(weights_path, map_location=device))
-    model.eval()
-
-    # 2. Dati
-    test_seq, test_targets, tickers, timestamps = prepare_data_test(dataset_path, history_window)
+    print(f"device: {device}")
     
-    # Dataset solo numerico per massimizzare la velocità
-    dataset = FastTensorDataset(test_seq)
-    dataloader = DataLoader(
-        dataset, 
-        batch_size=2048, # Batch size aumentato per saturare la GPU in inferenza
-        shuffle=False, 
-        num_workers=2, 
-        pin_memory=True
-    )
+   
+    df_main = None
 
-    # 3. Inferenza Vettorizzata
-    print("Inizio inferenza batch...")
-    all_preds = []
-    with torch.no_grad():
-        for batch_X in dataloader:
-            batch_X = batch_X.to(device, non_blocking=True)
-            preds = model(batch_X).squeeze(-1)
-            all_preds.append(preds.cpu().numpy())
+    for history_window in args.w:
+        print(f"\n" + "="*50)
+        print(f"inizio esecuzione finestra W = {history_window}")
+        print("="*50)
+        
+        model = transformer(history_window=history_window).to(device)
+        weights_path = f"weights/transformer_weights_w{history_window}.pth"
+        if not os.path.exists(weights_path):
+            print(f"pesi {weights_path} non trovati, l'esecuzione della dimensione {history_window} verrà saltata")
+            continue
+            
+        #carico pesi del modello
+        model.load_state_dict(torch.load(weights_path, map_location=device))
+        model.eval()
 
-    all_preds = np.concatenate(all_preds).ravel()
+        test_seq, test_targets, tickers, timestamps = prepare_data_test(dataset_path, history_window, sample_pct=args.p)
+        
+        if len(test_seq) == 0:
+            print("dati della finestra non sufficienti")
+            continue
+            
+        dataset = FinancialDataset(test_seq)
+        dataloader = DataLoader(
+            dataset, 
+            batch_size=2048, 
+            shuffle=False, 
+            num_workers=2, 
+            pin_memory=True
+        )
 
-    # 4. Creazione DataFrame vettorizzato
-    print("Costruzione tabella risultati...")
-    df_out = pd.DataFrame({
-        'ticker': tickers,
-        'timestamp': timestamps,
-        'window_size': history_window,
-        'target': test_targets,
-        'prev': all_preds
-    })
+        print("inizio testing")
+        all_preds = []
+        with torch.no_grad():
+            for batch_X in dataloader:
+                batch_X = batch_X.to(device, non_blocking=True)
+                preds = model(batch_X).squeeze(-1)
+                all_preds.append(preds.cpu().numpy())
 
-    # 5. Salvataggio Ultra Rapido
-    save_to_postgres_fast_copy(df_out, db_params)
-    print("Processo terminato.")
+        all_preds = np.concatenate(all_preds).ravel()
+
+        print(f"creazione dataframe per W={history_window}")
+        col_name = f'prev_w_{history_window}'
+        df_current = pd.DataFrame({
+            'ticker': tickers,
+            'timestamp': timestamps,
+            'target': test_targets,
+            col_name: all_preds
+        })
+        
+        df_current['timestamp'] = pd.to_datetime(df_current['timestamp'])
+
+        #aggiunge previsioni di una finestra al df generale
+        if df_main is None:
+            df_main = df_current
+        else:
+            df_main['timestamp'] = pd.to_datetime(df_main['timestamp'])
+            
+            #elimina la colonna col_name se esiste per sovrascriverla
+            if col_name in df_main.columns:
+                print(f"la colonna {col_name} esiste già nel file, verrà sovrascritta")
+                df_main = df_main.drop(columns=[col_name])
+            df_main.set_index(['ticker', 'timestamp'], inplace=True)
+            df_current.set_index(['ticker', 'timestamp'], inplace=True)
+            
+            #faccio un outer join per allineare i due df
+            df_main = df_main.join(df_current[[col_name]], how='outer')
+            
+            #aggiorna il target
+            if 'target' in df_current.columns:
+                if 'target' not in df_main.columns:
+                    df_main['target'] = np.nan
+                df_main['target'] = df_main['target'].combine_first(df_current['target'])
+                
+            #ripristino l'indice
+            df_main.reset_index(inplace=True)
+
+        print(f"finestra W={history_window} completata")
+        
+    if df_main is not None:
+        df_main.to_parquet(args.out, index=False)
+        print("salvataggio finale terminato")
+    else:
+        print("il df è vuoto, impossibile salvare")

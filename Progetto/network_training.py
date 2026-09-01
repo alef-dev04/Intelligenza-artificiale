@@ -12,20 +12,14 @@ from transformers import PatchTSTConfig, PatchTSTModel
 
 
 
-def prepare_data(df, window_size):
-    print("Preparazione dati in corso...")
+def prepare_data(df, window_size, sample_pct=100.0):
+    print("preparazione dati in corso")
     
-    # Assicurati che il timestamp sia in formato datetime
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     
-    # Filtro: anno del timestamp <= 2000 per il training
-    df_train = df[df['timestamp'].dt.year <= 2000].copy()
-    print(f"Righe dopo il filtro <= 2000: {len(df_train)}")
-    
-    # Ordina il dataset per ticker e poi temporalmente
+    df_train = df[df['timestamp'].dt.year <= 2000].copy()    
     df_train.sort_values(by=['ticker', 'timestamp'], inplace=True)
     
-    # Colonne delle feature
     feature_cols = [
         "ratio_O_t_div_C_t_prev", 
         "ratio_C_t_prev_div_O_t_prev", 
@@ -37,16 +31,14 @@ def prepare_data(df, window_size):
     val_seqs = []
     val_targets = []
     
-    print("Costruzione delle sliding window raggruppate per ticker (con validation split dell'85%)...")
-    # Raggruppa per ticker
+    print("costruzione sliding window")
     for ticker, group in df_train.groupby("ticker"):
         data_matrix = group[feature_cols].values
         target_array = group[target_col].values
         
-        # Indice per suddividere l'85% in training e il 15% in validation (temporal split)
+        #creo un indice per dividere dati di train e validazione
         split_idx = int(len(group) * 0.85)
         
-        # Crea le window: parte da window_size - 1 per includere correttamente i dati
         for i in range(window_size - 1, len(group)):
             X = data_matrix[i - window_size + 1 : i + 1] 
             y = target_array[i]                  
@@ -58,7 +50,33 @@ def prepare_data(df, window_size):
                 val_seqs.append(X)
                 val_targets.append(y)
             
-    return np.array(train_seqs), np.array(train_targets), np.array(val_seqs), np.array(val_targets)
+    train_seqs = np.array(train_seqs, dtype=np.float32)
+    train_targets = np.array(train_targets, dtype=np.float32)
+    val_seqs = np.array(val_seqs, dtype=np.float32)
+    val_targets = np.array(val_targets, dtype=np.float32)
+
+    #prendo un sottoinsieme dei dati se specificato, per far testare il codice al prof
+    if sample_pct < 100.0:
+        frac = sample_pct / 100.0
+        
+        #prendo sottoinsieme di dati per il training
+        n_train = len(train_seqs)
+        n_sample_train = int(n_train * frac)
+        idx_train = np.random.choice(n_train, size=n_sample_train, replace=True)
+        train_seqs = train_seqs[idx_train]
+        train_targets = train_targets[idx_train]
+        
+        #prendo sottoinsieme di dati per la validation
+        n_val = len(val_seqs)
+        n_sample_val = int(n_val * frac)
+        idx_val = np.random.choice(n_val, size=n_sample_val, replace=True)
+        val_seqs = val_seqs[idx_val]
+        val_targets = val_targets[idx_val]
+
+    print("fine preparazione dati")
+        
+
+    return train_seqs, train_targets, val_seqs, val_targets
 
 
 
@@ -75,35 +93,36 @@ class FinancialDataset(Dataset):
     def __getitem__(self, idx):
         return self.sequences[idx], self.targets[idx]      
 
-#inizializzazione modello transformers
+#inizializzazione modello 
 class transformer(nn.Module):
     def __init__(self, patch_size=None, patch_stride=None, d_model=32, num_feature=2, history_window=90):
         super().__init__()
         
-        # Calcolo dinamico se non specificato
+        #calcolo la dimensione delle patch e la loro sovrapposizione
+        #questo perché la dimensione della finestra è variabile
         if patch_size is None:
             patch_size = max(2, history_window // 5)
         if patch_stride is None:
             patch_stride = max(1, patch_size // 2)
         
-        
+        #configurazione del modello
         config = PatchTSTConfig(
             num_input_channels=num_feature,
             context_length=history_window,
             d_model=d_model,
-            num_hidden_layers=2, # Ridotto per combattere l'overfitting
-            num_attention_heads=2, # Ridotto per combattere l'overfitting
+            num_hidden_layers=2,
+            num_attention_heads=2, 
             patch_length=patch_size,
-            #sovrapposizione delle patch
             patch_stride=patch_stride,
-            #dropout=0.2, # Aggiunto dropout per mitigare overfitting
             attention_dropout=0.2
             )
 
+        #inizializzo il modello e calcolo quella che sarà la dimensione dei suoi embeddings
         self.encoder = PatchTSTModel(config)
         num_patches = (history_window - patch_size) // patch_stride + 1
         embeddings_dim = num_patches * d_model * num_feature
         
+        #inizializzazione rete feed-forward finale
         self.ff_head = nn.Sequential(
             nn.Flatten(start_dim=1),
             nn.Linear(embeddings_dim, 128),
@@ -130,20 +149,20 @@ class transformer(nn.Module):
         
 if __name__ == '__main__':
     
-    print("Caricamento dataset tramite polars...")
-    raw_df = pl.read_parquet("/kaggle/input/datasets/aleferri5642/market-data/market_data.parquet")
-    pandas_df = raw_df.to_pandas()
+    print("caricamento dataset")
+    pandas_df = pd.read_parquet("hf://datasets/ale5642/financial_data_ratios/market_data_ratios.parquet")
  
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Script in esecuzione su: {device}")
+    print(f"device: {device}")
     parser = argparse.ArgumentParser(description="Script di training Transformer")
-    parser.add_argument('--w', type=int, required=True, help='Dimensione della sliding window')
+    parser.add_argument('--w', type=int, required=True, help='dimensione della sliding window')
+    parser.add_argument('--p', type=float, default=100.0, help='percentuale di dati da usare in training')
 
     args = parser.parse_args()
     
     history_window = args.w
     
-    X_train, Y_train, X_val, Y_val = prepare_data(pandas_df, history_window)
+    X_train, Y_train, X_val, Y_val = prepare_data(pandas_df, history_window, sample_pct=args.p)
 
     train_dataset = FinancialDataset(X_train, Y_train)
     val_dataset = FinancialDataset(X_val, Y_val)
@@ -163,19 +182,17 @@ if __name__ == '__main__':
     epochs = 20
 
     model = transformer(history_window=history_window).to(device)
-    if torch.cuda.device_count() > 1:
-        print(f"utilizzo {torch.cuda.device_count()} gpu")
-        model = nn.DataParallel(model)
-
+    
     criterion = nn.MSELoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.05)
-    # Aggiunto uno scheduler per ridurre il learning rate se la val loss smette di scendere
+    #scheduler per ridurre il learning rate se la val loss smette di scendere
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2)
     model.train()
 
     print("inizio training")
 
     for epoch in range(epochs):
+        #train
         epoch_loss = 0.0
         model.train()
         for batch_X, batch_Y in train_loader:
@@ -190,7 +207,7 @@ if __name__ == '__main__':
             
         epoch_loss /= len(train_loader)
         
-        # Calcolo della validation loss
+        #validation
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
@@ -204,16 +221,16 @@ if __name__ == '__main__':
                 
         val_loss /= len(val_loader)
         
-        print(f"Epoca [{epoch+1}/{epochs}] | Train Loss: {epoch_loss:.6f} | Val Loss: {val_loss:.6f}")
+        print(f"epoca [{epoch+1}/{epochs}] | train loss: {epoch_loss:.6f} | val loss: {val_loss:.6f}")
         scheduler.step(val_loss)
-    print("training completato con successo")
+    print("training completato")
 
-    # Salvataggio dei pesi del modello
+    #salvo i pesi del modello per un utilizzo futuro
     model_save_path = f"transformer_weights_w{history_window}.pth"
     if isinstance(model, nn.DataParallel):
         torch.save(model.module.state_dict(), model_save_path)
     else:
         torch.save(model.state_dict(), model_save_path)
-    print(f"Pesi del modello salvati in: {model_save_path}")
+    print(f"pesi del modello salvati in: {model_save_path}")
     
-    print("Processo terminato.")
+    print("processo terminato")

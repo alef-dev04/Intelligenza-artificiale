@@ -1,0 +1,9 @@
+torch
+transformers
+pandas
+polars
+duckdb
+matplotlib
+pyarrow
+fastparquet
+scikit-learn
