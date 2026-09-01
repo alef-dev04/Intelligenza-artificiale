@@ -1,5 +1,5 @@
 import argparse
-
+import os
 import polars as pl
 import pandas as pd
 import torch
@@ -225,8 +225,9 @@ if __name__ == '__main__':
         scheduler.step(val_loss)
     print("training completato")
 
-    #salvo i pesi del modello per un utilizzo futuro
-    model_save_path = f"transformer_weights_w{history_window}.pth"
+    #salvo i pesi del modello per un utilizzo futuro 
+    os.makedirs("weights", exist_ok=True)
+    model_save_path = f"weights/transformer_weights_w{history_window}.pth"
     if isinstance(model, nn.DataParallel):
         torch.save(model.module.state_dict(), model_save_path)
     else:
