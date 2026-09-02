@@ -1,6 +1,6 @@
 # Istruzioni Esecuzione Docker 
 
- Il container utilizza solo CPU per massimizzare la compatibilità
+ Il container utilizza solo CPU per massimizzare la compatibilità e per velocità di scaricamento modulo torch
 ## 1. Costruire l'Immagine Docker
 
 Eseguire il comando

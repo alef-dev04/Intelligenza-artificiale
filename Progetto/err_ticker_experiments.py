@@ -1,11 +1,12 @@
-import psycopg2
-from psycopg2.extras import execute_values
+import argparse
 import polars as pl
 import os
 
-
-
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--w', type=int, nargs='+', required=True, help='finestre da analizzare (es. --w 10 20 30)')
+    args = parser.parse_args()
+
     file_input = "predictions_all_windows.parquet"
     
     if not os.path.exists(file_input):
@@ -15,7 +16,7 @@ def main():
     print(f"carico dati")
     df = pl.scan_parquet(file_input)
     
-    windows = [10, 20, 30, 50, 100]
+    windows = args.w
     results = []
 
     for w in windows:

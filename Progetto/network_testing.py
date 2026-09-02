@@ -4,7 +4,6 @@ import os
 import numpy as np
 import pandas as pd
 import polars as pl
-import psycopg2
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -55,7 +54,7 @@ class transformer(nn.Module):
 def prepare_data_test(parquet_path, window_size, sample_pct=100.0):
     print("carico dataset")
     df = pd.read_parquet(parquet_path)
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')    
     df_test = df[df['timestamp'].dt.year <= 2000].copy()
     df_test.sort_values(by=['ticker', 'timestamp'], inplace=True)
     
@@ -96,7 +95,7 @@ def prepare_data_test(parquet_path, window_size, sample_pct=100.0):
         frac = sample_pct / 100.0
         n_seq = len(sequences)
         n_sample = int(n_seq * frac)
-        idx = np.random.choice(n_seq, size=n_sample, replace=True)
+        idx = np.random.choice(n_seq, size=n_sample, replace=False)
         
         sequences = sequences[idx]
         targets = targets[idx]
@@ -211,6 +210,7 @@ if __name__ == '__main__':
         print(f"finestra W={history_window} completata")
         
     if df_main is not None:
+        df_main['timestamp'] = pd.to_datetime(df_main['timestamp']).dt.strftime('%Y-%m-%d')
         df_main.to_parquet(args.out, index=False)
         print("salvataggio finale terminato")
     else:

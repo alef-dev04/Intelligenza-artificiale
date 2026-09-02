@@ -1,10 +1,13 @@
+import argparse
 import polars as pl
 
-
+parser = argparse.ArgumentParser()
+parser.add_argument('--w', type=int, nargs='+', required=True, help='finestre da analizzare (es. --w 10 20 30)')
+args = parser.parse_args()
 
 df = pl.read_parquet("predictions_all_windows.parquet")
 
-windows = [10, 20, 30, 50, 100]
+windows = args.w
 results = []
 
 print("inizio calcolo")
