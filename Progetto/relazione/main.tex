@@ -65,7 +65,7 @@ La struttura della LSTM si caratterizza per l'introduzione di una \textbf{memory
     \label{fig:lstm_architecture}
 \end{figure}
 La \texttt{memory cell} permette all'informazione contenente il contesto di tutte le elaborazioni precedenti di fluire da un livello all'altro, infatti la sua evoluzione dipende dall'interazione dei vari gate.
-L'\texttt{hidden state} funge invece da "memoria a breve termine", decidendo quanta dell'informazione calcolata al passo precedente, mostrare al passo successivo; agendo come un "filtro" dell'\textsl{output gate}.
+L'\texttt{hidden state} funge invece da "memoria a breve termine", decidendo quanta dell'informazione calcolata al passo precedente mostrare al passo successivo; agendo come un "filtro" dell'\textsl{output gate}.
 L'elaborazione principale avviene attraverso i 3 gate:
 \begin{itemize}
     \item Il \textsl{Forget Gate} decide quanta informazione proveniente dal passo temporale precedente tenere o scartare:
@@ -136,9 +136,6 @@ in cui:
     \item $O_t$ agisce da filtro decidendo quali tra questi valori siano rilevanti per questo step temporale.
 
 \end{enumerate}
-
-
-Il risultato finale fungerà da filtro dell'informazione, un valore vicino allo $0$ indica che l'informazione verrà cancellata (poiché corrisponde all'informazione già in nostro possesso); un valore vicino ad $1$ invece permette all'informazione di passare verso il passo successivo.
 
 Il limite di questa architettura però riguarda la sua elaborazione sequenziale, come abbiamo visto calcolare lo stato $h_t$ è necessario aver completato il calcolo di $h_{t-1}$, di conseguenza questo approccio non è parallelizzabile, rendendolo così inefficiente.
 \subsection{Il Vanishing Gradient}
@@ -222,8 +219,8 @@ Dividiamo il suo calcolo in 4 step: \newline
 \textbf{Step 1: Calcolo delle affinità $QK^T$}: Si calcola l'affinità della parola in esame, quella nella query, con tutte le altre parole all'interno della frase. Questo avviene tramite prodotto scalare delle matrici, la matrice risultante conterrà i punteggi di attenzione grezzi, dove la cella $(i,j)$ indica l'affinità tra la Query dell'i-esimo token e la Key dei j-esimo token, il quale avrà un valore alto se due parole hanno alta affinità e un valore basso altrimenti. \newline
 \textbf{Step 2: La stabilizzazione $\sqrt{d_k}$}: Questo passaggio va semplicemente a scalare i numeri per fare in modo di non lavorare con numeri enormi, i quali potrebbero poi essere un problema per il calcolo del gradiente, dove $d_k$ è la dimensione del vettore Key \newline
 \textbf{Step 3: La normalizzazione in percentuale, funzione Softmax}: A questo punto alla matrice viene applicata la funzione \textbf{Softmax}, producendo $$A = \text{softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right)$$ 
-La matrice $A \in \mathbb{R}^{L \times L}$ contiene quindi i nostri \textbf{pesi di attenzione}, poiché la funzione softmax per ogni riga $i$ mappa i punteggi grezzo in un distribuzione di probabilità, infatti per le proprietà delle distribuzioni: $$\sum_{j=1}^{L} A_{i, j} = 1 \quad \text{con } A_{i, j} \in [0, 1]$$ Quindi in modo simile a prima $A[i,j]$ quantifica la percentuale di "attenzione" che il token $i$ deve assegnare al token $j$.
-\textbf{Step 4: Estrazione del significato $\times V$}: Infine la matrice con i pesi di attenzione viene moltiplicata per la matrice Value $V$, ciò vuol dire che l'output per il token $i$ è la media pesata di tutti i vettori Value della sequenza: $$\text{Output}_i = \sum_{j=1}^{L} A_{i, j} V_j$$
+La matrice $A \in \mathbb{R}^{L \times L}$ contiene quindi i nostri \textbf{pesi di attenzione}, poiché la funzione softmax per ogni riga $i$ mappa i punteggi grezzo in un distribuzione di probabilità, infatti per le proprietà delle distribuzioni: $$\sum_{j=1}^{L} A_{i, j} = 1 \quad \text{con } A_{i, j} \in [0, 1]$$ Quindi in modo simile a prima $A[i,j]$ quantifica la percentuale di "attenzione" che il token $i$ deve assegnare al token $j$.\newline
+\textbf{Step 4: Estrazione del significato $\times V$}: Infine la matrice con i pesi di attenzione viene moltiplicata per la matrice Value $V$, ciò vuol dire che l'output per il token $i$ è la media pesata di tutti i vettori Value della sequenza: $$\text{Output}_i = \sum_{j=1}^{L} A_{i, j} V_j$$ 
 A questo punto il vettore risultante del token $i$ conterrà sia il suo significato originale, sia il contesto (in modo pesato) derivante da tutti gli altri token.
 
 Riprendiamo ora l'esempio fatto in precedenza per capire come funziona il meccanismo.
@@ -296,13 +293,13 @@ Il denominatore invece denota la frequenza dell'onda, per $i=0$ (le prime dimens
 Nelle ultime dimensioni ($i = \frac{d_{\text{model}}}{2}-1$) la frequenza sarà bassa, in modo che la variazione dei valori delle posizioni vicine sarà quasi nulla, ma ci sarà invece un cambiamento dei valori delle posizioni lontane; così da mantenere anche un contesto a lungo raggio. \newline
 La scelta del valore $10000$ permette di avere un periodo di $\approx 60000$ token per le ultime posizioni del vettore, questo permette di non avere sovrapposizioni di valori.
 Prendiamo ad esempio un modello di dimensione 4 ($d_{model}=4$) e calcoliamo il vettore di posizione per il primo token di una sequenza: \newpage
-$$\text{PE}(1) = \left[ \sin\left(\frac{1}{10000^{2\times 0/4}}\right), \, \cos\left(\frac{1}{10000^{2\times 0/4}}\right), \, \sin\left(\frac{1}{10000^{2\times 1/4}}\right), \, \cos\left(\frac{1}{10000^{2\times 1/4}}\right) \right]$$
+$$\text{PE(1)} = \left[ \sin\left(\frac{1}{10000^{2\times 0/4}}\right), \, \cos\left(\frac{1}{10000^{2\times 0/4}}\right), \, \sin\left(\frac{1}{10000^{2\times 1/4}}\right), \, \cos\left(\frac{1}{10000^{2\times 1/4}}\right) \right]$$
 eseguendo i calcoli:
-$$\text{PE}(1) = \left[ \sin\left(\frac{1}{1}\right), \, \cos\left(\frac{1}{1}\right), \, \sin\left(\frac{1}{100}\right), \, \cos\left(\frac{1}{100}\right) \right]$$
+$$\text{PE(1)} = \left[ \sin\left(\frac{1}{1}\right), \, \cos\left(\frac{1}{1}\right), \, \sin\left(\frac{1}{100}\right), \, \cos\left(\frac{1}{100}\right) \right]$$
 applicando le funzioni il vettore finale risulta:
-$$\text{PE}(1) = \big[ 0.8415, \, 0.5403, \, 0.0100, \, 0.9999 \big]$$
+$$\text{PE(1)} = \big[ 0.8415, \, 0.5403, \, 0.0100, \, 0.9999 \big]$$
 Eseguendo lo stesso calcolo per il token successivo otteniamo:
-$$\text{PE}(2) = \big[ 0.9092, \, -0.4161, \, 0.0199, \, 0.9998 \big]$$
+$$\text{PE(2)} = \big[ 0.9092, \, -0.4161, \, 0.0199, \, 0.9998 \big]$$
 Confrontando i due risultati possiamo notare che avviene una variazione di valori come descritto in precedenza.
 
 \subsection{Encoder}
