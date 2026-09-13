@@ -1,6 +1,6 @@
 # Istruzioni Esecuzione Docker 
 
- Il container utilizza solo CPU per massimizzare la compatibilità e per velocità di scaricamento modulo torch
+Il container utilizza solo CPU per massimizzare la compatibilità e per velocità di scaricamento modulo torch
 ## 1. Costruire l'Immagine Docker
 
 Eseguire il comando
@@ -14,10 +14,10 @@ docker build -t progetto_ai_transformer .
 Il comando seguente avvia il docker in modalità interattiva, facendo in modo che i file generati dagli script vengano salvati direttamente sul proprio computer
 
 ```bash
-#per Mac o Linux:
+#Mac o Linux:
 docker run -it -v "$(pwd):/app" progetto_ai_transformer
 
-#per Windows:
+#Windows:
 docker run -it -v "${PWD}:/app" progetto_ai_transformer
 ```
 
@@ -42,7 +42,7 @@ python network_testing.py --w 10 --p 5
 python err_config_experiments.py
 python err_ticker_experiments.py
 ```
-*(Questo genererà i file parquet degli errori).*
+*(Questo genererà i file parquet degli errori)*
 
 
 Per uscire dal container digitare `exit`
