@@ -108,7 +108,7 @@ def prepare_data_test(parquet_path, window_size, sample_pct=100.0):
 
 class FinancialDataset(Dataset):
     def __init__(self, sequences):
-        self.sequences = torch.from_numpy(sequences)
+        self.sequences = torch.tensor(sequences, dtype=torch.float32)
 
     def __len__(self):
         return len(self.sequences)
@@ -145,7 +145,9 @@ if __name__ == '__main__':
         #carico pesi del modello
         model.load_state_dict(torch.load(weights_path, map_location=device))
         model.eval()
-
+        #faccio in modo che vengano presi gli stessi dati per ogni finestra
+        #in questo modo si possono confrontare le performance
+        np.random.seed(42)
         test_seq, test_targets, tickers, timestamps = prepare_data_test(dataset_path, history_window, sample_pct=args.p)
         
         if len(test_seq) == 0:
@@ -192,6 +194,7 @@ if __name__ == '__main__':
             if col_name in df_main.columns:
                 print(f"la colonna {col_name} esiste già nel file, verrà sovrascritta")
                 df_main = df_main.drop(columns=[col_name])
+                
             df_main.set_index(['ticker', 'timestamp'], inplace=True)
             df_current.set_index(['ticker', 'timestamp'], inplace=True)
             

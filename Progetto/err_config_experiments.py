@@ -24,7 +24,8 @@ for w in windows:
         mse=((pl.col("target") - pl.col(pred_col)) ** 2).mean(),
         mae=(pl.col("target") - pl.col(pred_col)).abs().mean(),
         mape=((pl.col("target") - pl.col(pred_col)) / pl.col("target")).abs().mean()
-    ).row(0)
+    ).row(0) #con row(0) prendo i dati effettivi, senza di esso avrei solo un oggetto di tipo dataframe
+    
     
     results.append({
         "window": w,
